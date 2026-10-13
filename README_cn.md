@@ -81,10 +81,12 @@ $`\mathrm{SAR}_1`$ 是单个特征效应解释不了的行为方差占比，$`\r
 |---|---|---|
 | 排序保真度 | $`F^{(r)}_{\mathrm{rank}}=\mathrm{Spearman}_{S\in\mathcal U}\big(\widehat a_r(S),g_x(S)\big)`$ | 等于 1 表示模型把所有留出子集都排对了 |
 | 排序错误 | $`\mathcal E(a)=\mathbb E\big[(\Delta g)^2\,\mathbf 1\{\Delta g\,\Delta a\le 0\}\big]/(2V)`$ | 排反的子集对，按两者的行为差加权 |
-| 符号错误 | 满足 $`\big(g_x(S)-g_x(N_x)\big)\big(\widehat a_r(S)-\widehat a_r(N_x)\big)\lt 0`$ 的 $`S\in\mathcal U`$ 所占比例 | 模型把变化的方向判断反了 |
+| 符号错误 | 满足 $`\operatorname{sign}e(S)\ne\operatorname{sign}\widehat e_r(S)`$ 的 $`S\in\mathcal U`$ 所占比例，其中 $`e(S)=g_x(S)-g_x(N_x)`$，$`\widehat e_r(S)=\widehat a_r(S)-\widehat a_r(N_x)`$ | 模型把变化的方向判断反了 |
 | 选择遗憾 | $`\big(g_x(S^\star)-g_x(\widehat S_r)\big)/\big(\max_{\mathcal U}g_x-\min_{\mathcal U}g_x\big)`$ | 按模型挑出的子集比真正最好的子集差多少 |
 
 这里 $`\Delta g=g_x(S)-g_x(T)`$，$`\Delta a=a(S)-a(T)`$，$`S`$ 和 $`T`$ 是两个独立抽取的子集。$`S^\star`$ 是留出子集中真正最好的子集，$`\widehat S_r`$ 是模型排在第一的子集。论文证明了 $`\mathcal E(\Pi_r g_x)\le\mathrm{SAR}_r`$。
+
+🔢 **数值约定。** `sar.py` 沿用论文代码的数值约定，算出的数字与论文一致。估计里用 $`\epsilon=10^{-8}`$，对 logit 量级的行为可以忽略。但当 $`\widehat V`$ 很小时，它会让 $`\widehat{\mathrm{SAR}}_r`$ 随行为的尺度变化，所以 $`\epsilon`$ 超过 $`\widehat V`$ 的 1% 时 `sar` 会给出警告。在论文实验的 4,900 个 prompt 上，$`\epsilon`$ 对估计的影响最多 1.4%。$`\widehat{\mathrm{SAR}}_1\le10^{-4}`$ 时不定义 $`\widehat\rho_2`$。符号按精确值比较，只有一侧的变化恰好为零时也算符号错误。
 
 🔄 **旋转坐标。** 为了检验组合性是否取决于 SAE 的坐标，我们把贡献矩阵 $`D_x=[\delta_1,\dots,\delta_K]`$ 换成 $`D_xQ`$，其中 $`Q`$ 是随机正交矩阵并满足 $`Q\mathbf 1=\mathbf 1`$。这样选中的子空间、总贡献和上层都不变。
 
@@ -112,10 +114,17 @@ $`\mathrm{SAR}_1`$ 是单个特征效应解释不了的行为方差占比，$`\r
 ## ⚙️ 安装
 
 ```bash
+git clone https://github.com/UniqueMax2005/sar-compositionality.git
+cd sar-compositionality
+python -m venv .venv && source .venv/bin/activate    # Windows 上用 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-`sar.py` 只需要 NumPy。demo 另外需要 PyTorch、TransformerLens、SAE Lens 和 Matplotlib。
+`sar.py` 只需要 NumPy。demo 另外需要 PyTorch、TransformerLens、SAE Lens 和 Matplotlib。[`requirements-lock.txt`](requirements-lock.txt) 固定了下面 demo 输出所用的确切版本，运行环境是 Python 3.12。测试检查论文依赖的数学性质：仿射行为的残差为零，成对博弈能被成对模型完全恢复，旋转保持贡献的子空间和总和不变。
+
+```bash
+python -m pytest
+```
 
 ---
 
@@ -137,7 +146,17 @@ print(f"rank fidelity {r['rank1']:.3f} -> {r['rank2']:.3f}")
 
 💡 特征 0 和 2 单独各加 1，同时保留也只加 1。一阶模型留下 27% 的留出方差解释不了，加入特征对后全部补回。
 
-在真实模型上，`g` 来自上面的干预。对每个子集，去掉不在其中的选中特征的解码贡献，跑完上层，再读出行为。`rotation(K)` 返回旋转坐标所用的随机 $`Q`$。
+🔌 **接入自己的模型。** 在真实模型上，`g` 来自上面的干预。取 SAE 位置的激活 `h` 和 $`K`$ 个解码贡献 `delta`，形状为 `(K, d)`。每个子集去掉它没有保留的贡献，再由你的模型把每个修改后的激活变成一个数。
+
+```python
+import numpy as np
+
+h_tilde = h - (~masks).astype(float) @ delta     # 每个子集一个修改后的激活
+g = np.array([behavior(x) for x in h_tilde])     # 跑完上层，读出一个标量
+r = sar(g, masks, fit, held)
+```
+
+在 [`demo.py`](demo.py) 里这两步就是 `top_contributions` 和 `behavior`，换模型、换 SAE 或换行为时只需要替换这两个函数。旋转坐标用 `rotation(K)` 得到随机的 $`Q`$，贡献换成 `Q.T @ delta`。
 
 👉 在 GPT-2 Small 上运行
 

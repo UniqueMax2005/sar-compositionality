@@ -109,12 +109,19 @@ orders and selects subsets.
 |---|---|---|
 | Rank fidelity | $`F^{(r)}_{\mathrm{rank}}=\mathrm{Spearman}_{S\in\mathcal U}\big(\widehat a_r(S),g_x(S)\big)`$ | 1 means the model orders all held out subsets correctly |
 | Ordering error | $`\mathcal E(a)=\mathbb E\big[(\Delta g)^2\,\mathbf 1\{\Delta g\,\Delta a\le 0\}\big]/(2V)`$ | Wrongly ordered pairs of subsets, weighted by their behavior difference |
-| Sign error | Share of $`S\in\mathcal U`$ with $`\big(g_x(S)-g_x(N_x)\big)\big(\widehat a_r(S)-\widehat a_r(N_x)\big)\lt 0`$ | The model gets the direction of the change wrong |
+| Sign error | Share of $`S\in\mathcal U`$ with $`\operatorname{sign}e(S)\ne\operatorname{sign}\widehat e_r(S)`$, where $`e(S)=g_x(S)-g_x(N_x)`$ and $`\widehat e_r(S)=\widehat a_r(S)-\widehat a_r(N_x)`$ | The model gets the direction of the change wrong |
 | Selection regret | $`\big(g_x(S^\star)-g_x(\widehat S_r)\big)/\big(\max_{\mathcal U}g_x-\min_{\mathcal U}g_x\big)`$ | Loss from picking the subset the model ranks first |
 
 Here $`\Delta g=g_x(S)-g_x(T)`$ and $`\Delta a=a(S)-a(T)`$ for two independent subsets $`S`$ and $`T`$, $`S^\star`$ is the best
 held out subset, and $`\widehat S_r`$ is the subset the model ranks first. The paper shows
 $`\mathcal E(\Pi_r g_x)\le\mathrm{SAR}_r`$.
+
+🔢 **Numerical conventions.** `sar.py` keeps the conventions of the code behind the paper, so its numbers match the
+paper. The estimate uses $`\epsilon=10^{-8}`$. This is negligible for behaviors on the logit scale, but it makes
+$`\widehat{\mathrm{SAR}}_r`$ depend on scale when $`\widehat V`$ is tiny, so `sar` warns when $`\epsilon`$ exceeds 1% of
+$`\widehat V`$. In 4,900 prompts from the paper's experiments, $`\epsilon`$ changes the estimate by at most 1.4%.
+$`\widehat\rho_2`$ is left undefined when $`\widehat{\mathrm{SAR}}_1\le10^{-4}`$. Signs are compared exactly, so a zero
+change on only one side counts as a sign error.
 
 🔄 **Rotated coordinates.** To test whether compositionality depends on the SAE basis, we replace the contributions
 $`D_x=[\delta_1,\dots,\delta_K]`$ by $`D_xQ`$, where $`Q`$ is a random orthogonal matrix with $`Q\mathbf 1=\mathbf 1`$. This
@@ -149,10 +156,20 @@ explanations. The numbers are prompt level Spearman correlations over three beha
 ## ⚙️ Install
 
 ```bash
+git clone https://github.com/UniqueMax2005/sar-compositionality.git
+cd sar-compositionality
+python -m venv .venv && source .venv/bin/activate    # on Windows .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 `sar.py` needs only NumPy. The demo also needs PyTorch, TransformerLens, SAE Lens and Matplotlib.
+[`requirements-lock.txt`](requirements-lock.txt) pins the exact versions behind the demo output below, run with
+Python 3.12. The tests check the properties the paper relies on. Affine behaviors give zero residual, pairwise games are
+recovered exactly by pairs, and rotations keep the span and the sum of the contributions.
+
+```bash
+python -m pytest
+```
 
 ---
 
@@ -175,9 +192,21 @@ print(f"rank fidelity {r['rank1']:.3f} -> {r['rank2']:.3f}")
 💡 Features 0 and 2 each add 1 on their own but only 1 together. The first order model leaves 27% of the held out variance
 unexplained, and pairs recover all of it.
 
-On a real model, `g` comes from the intervention above. For each subset, remove the decoded contributions of the
-selected features that are not in it, run the upper layers, and read the behavior. `rotation(K)` returns a random $`Q`$
-for the rotated coordinates.
+🔌 **Your own model.** On a real model, `g` comes from the intervention above. Take the activation `h` at the SAE site
+and the $`K`$ decoded contributions `delta` with shape `(K, d)`. Each subset removes the contributions it leaves out,
+and your model turns each patched activation into one number.
+
+```python
+import numpy as np
+
+h_tilde = h - (~masks).astype(float) @ delta     # one patched activation per subset
+g = np.array([behavior(x) for x in h_tilde])     # run the upper layers and read a scalar
+r = sar(g, masks, fit, held)
+```
+
+In [`demo.py`](demo.py) these two steps are `top_contributions` and `behavior`, the only functions to replace for
+another model, SAE or behavior. For the rotated coordinates, `rotation(K)` returns a random $`Q`$ and the contributions
+become `Q.T @ delta`.
 
 👉 On GPT-2 Small
 
