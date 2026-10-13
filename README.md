@@ -176,29 +176,29 @@ python -m pytest
 ## 🚀 Quickstart
 
 ```python
+import numpy as np
 from sar import coalitions, sar
 
 masks, fit, held = coalitions(K=6)                                # 384 subsets, 256 to fit and 128 held out
 s = masks.astype(float)                                           # s[m, i] = 1 if subset m keeps feature i
-g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2]  # features 0 and 2 are redundant
+noise = 0.02 * np.random.default_rng(0).standard_normal(len(s))   # a little measurement noise
+g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2] + noise  # features 0 and 2 are redundant
 
 r = sar(g, masks, fit, held)
 print(f"SAR_1 {r['sar1']:.3f}  SAR_2 {r['sar2']:.3f}  rho_2 {r['rho2']:.2f}")
 print(f"rank fidelity {r['rank1']:.3f} -> {r['rank2']:.3f}")
-# SAR_1 0.274  SAR_2 0.000  rho_2 1.00
-# rank fidelity 0.855 -> 0.995
+# SAR_1 0.271  SAR_2 0.002  rho_2 0.99
+# rank fidelity 0.850 -> 0.991
 ```
 
 💡 Features 0 and 2 each add 1 on their own but only 1 together. The first order model leaves 27% of the held out variance
-unexplained, and pairs recover all of it.
+unexplained, and pairs recover all of it except the measurement noise.
 
 🔌 **Your own model.** On a real model, `g` comes from the intervention above. Take the activation `h` at the SAE site
 and the $`K`$ decoded contributions `delta` with shape `(K, d)`. Each subset removes the contributions it leaves out,
 and your model turns each patched activation into one number.
 
 ```python
-import numpy as np
-
 h_tilde = h - (~masks).astype(float) @ delta     # one patched activation per subset
 g = np.array([behavior(x) for x in h_tilde])     # run the upper layers and read a scalar
 r = sar(g, masks, fit, held)

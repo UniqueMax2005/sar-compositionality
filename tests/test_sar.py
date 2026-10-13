@@ -2,7 +2,9 @@
 
     pytest -q
 """
+import re
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,7 +17,8 @@ K = 16
 def quickstart():
     masks, fit, held = coalitions(K=6)
     s = masks.astype(float)
-    g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2]
+    noise = 0.02 * np.random.default_rng(0).standard_normal(len(s))
+    g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2] + noise
     return g, masks, fit, held
 
 
@@ -31,8 +34,17 @@ def game(seed=3):
 
 def test_quickstart_matches_readme():
     r = sar(*quickstart())
-    assert (round(r["sar1"], 3), round(r["sar2"], 3), round(r["rho2"], 2)) == (0.274, 0.0, 1.0)
-    assert (round(r["rank1"], 3), round(r["rank2"], 3)) == (0.855, 0.995)
+    assert (round(r["sar1"], 3), round(r["sar2"], 3), round(r["rho2"], 2)) == (0.271, 0.002, 0.99)
+    assert (round(r["rank1"], 3), round(r["rank2"], 3)) == (0.850, 0.991)
+
+
+@pytest.mark.parametrize("readme", ["README.md", "README_cn.md"])
+def test_readme_quickstart_prints_what_it_says(readme, capsys):
+    text = (Path(__file__).parents[1] / readme).read_text(encoding="utf8")
+    code = re.search(r"## 🚀 [^\n]+\n\n```python\n(.*?)```", text, re.S).group(1)
+    exec(compile(code, readme, "exec"), {})
+    expected = [line[2:] for line in code.splitlines() if line.startswith("# ")]
+    assert capsys.readouterr().out.splitlines() == expected
 
 
 def test_values_are_stable():

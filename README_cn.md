@@ -131,26 +131,26 @@ python -m pytest
 ## 🚀 快速上手
 
 ```python
+import numpy as np
 from sar import coalitions, sar
 
 masks, fit, held = coalitions(K=6)                                # 384 个子集，256 个拟合，128 个留出
 s = masks.astype(float)                                           # s[m, i] = 1 表示子集 m 保留特征 i
-g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2]  # 特征 0 和 2 是冗余的
+noise = 0.02 * np.random.default_rng(0).standard_normal(len(s))   # 少量测量噪声
+g = s @ [1.0, 0.5, 1.0, -0.3, 0.2, 0.1] - 1.0 * s[:, 0] * s[:, 2] + noise  # 特征 0 和 2 是冗余的
 
 r = sar(g, masks, fit, held)
 print(f"SAR_1 {r['sar1']:.3f}  SAR_2 {r['sar2']:.3f}  rho_2 {r['rho2']:.2f}")
 print(f"rank fidelity {r['rank1']:.3f} -> {r['rank2']:.3f}")
-# SAR_1 0.274  SAR_2 0.000  rho_2 1.00
-# rank fidelity 0.855 -> 0.995
+# SAR_1 0.271  SAR_2 0.002  rho_2 0.99
+# rank fidelity 0.850 -> 0.991
 ```
 
-💡 特征 0 和 2 单独各加 1，同时保留也只加 1。一阶模型留下 27% 的留出方差解释不了，加入特征对后全部补回。
+💡 特征 0 和 2 单独各加 1，同时保留也只加 1。一阶模型留下 27% 的留出方差解释不了，加入特征对后除测量噪声外全部补回。
 
 🔌 **接入自己的模型。** 在真实模型上，`g` 来自上面的干预。取 SAE 位置的激活 `h` 和 $`K`$ 个解码贡献 `delta`，形状为 `(K, d)`。每个子集去掉它没有保留的贡献，再由你的模型把每个修改后的激活变成一个数。
 
 ```python
-import numpy as np
-
 h_tilde = h - (~masks).astype(float) @ delta     # 每个子集一个修改后的激活
 g = np.array([behavior(x) for x in h_tilde])     # 跑完上层，读出一个标量
 r = sar(g, masks, fit, held)
