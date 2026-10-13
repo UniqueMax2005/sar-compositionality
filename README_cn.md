@@ -3,7 +3,7 @@
 **Haotian Ma, Ziye Mei, Frederic Sala**<br>
 University of Wisconsin–Madison
 
-🌍 [English](README.md) | [中文](README_cn.md)
+🌍 [English](README.md) | [中文](README_cn.md) &nbsp; [![tests](https://github.com/UniqueMax2005/sar-compositionality/actions/workflows/tests.yml/badge.svg)](https://github.com/UniqueMax2005/sar-compositionality/actions/workflows/tests.yml)
 
 👉 一句话总结。SAE 特征是线性解码的，但它们对模型行为的影响不一定能相加。我们提出 SAE 可加性残差 SAR，用来衡量单个特征效应解释不了的行为变化。在全部 18 个模型与行为设置中，学到的 SAE 坐标留下的残差都比同一子空间的随机旋转更小。但 SAE 坐标并不完全可加，加入特征对之后，留出子集上的预测在每个设置和组合 steering 实验中都更好。
 

@@ -3,7 +3,7 @@
 **Haotian Ma, Ziye Mei, Frederic Sala**<br>
 University of Wisconsin–Madison
 
-🌍 [English](README.md) | [中文](README_cn.md)
+🌍 [English](README.md) | [中文](README_cn.md) &nbsp; [![tests](https://github.com/UniqueMax2005/sar-compositionality/actions/workflows/tests.yml/badge.svg)](https://github.com/UniqueMax2005/sar-compositionality/actions/workflows/tests.yml)
 
 👉 TL;DR. SAE features are decoded linearly, but their effects on model behavior need not add up. We introduce SAE
 Additivity Residuals (SAR), which measure the behavioral variation left unexplained by individual feature effects.
